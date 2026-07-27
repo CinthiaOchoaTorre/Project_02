@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paradise Escape - 15 Puzzle</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="site-nav">
+    <div class="logo">Paradise Escape</div>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="#leaderboard">Leaderboard</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="setup-panel">
+      <h1>Paradise Escape</h1>
+      <p class="tagline">A Beach-Themed 15 Puzzle</p>
+
+      <label for="playerName">Enter your name:</label>
+      <input type="text" id="playerName" placeholder="Player name" maxlength="20">
+
+      <div class="mode-cards">
+        <button class="mode-card" data-mode="tide">Tide Mode</button>
+        <button class="mode-card" data-mode="breeze">Ocean Breeze Mode</button>
+        <button class="mode-card" data-mode="sunshine">Sunshine Mode</button>
+      </div>
+    </section>
+
+    <section id="game-panel" hidden>
+      <div class="status-bar">
+        <span id="moveCounter">Moves: 0</span>
+        <span id="timerDisplay">Time: 0s</span>
+        <span id="hintCounter">Hints: 3</span>
+      </div>
+
+      <div id="puzzleBoard" class="puzzle-board"></div>
+
+      <div class="controls">
+        <button id="shuffleBtn">Shuffle</button>
+        <button id="resetBtn">Reset</button>
+        <button id="hintBtn">Magic Hint</button>
+      </div>
+
+      <p id="winMessage" class="win-message" hidden>You solved it!</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>CSC 4370/6370 - Project 2 Final - Summer 2026</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
