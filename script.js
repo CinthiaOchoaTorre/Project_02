@@ -141,3 +141,711 @@ document.getElementById("resetBtn").addEventListener("click", () => {
   startNewGame();
   updateMoveCounter();
 });
+
+let gameTimer = null;
+let gameSeconds = 0;
+let timerRunning = false;
+let gameCompleted = false;
+
+
+/* Get timer element */
+
+const timerDisplay =
+  document.getElementById("timerDisplay");
+
+
+/* Update timer display */
+
+function updateGameTimerDisplay() {
+
+  const minutes =
+    Math.floor(gameSeconds / 60);
+
+  const seconds =
+    gameSeconds % 60;
+
+  const formattedMinutes =
+    String(minutes).padStart(2, "0");
+
+  const formattedSeconds =
+    String(seconds).padStart(2, "0");
+
+  timerDisplay.textContent =
+    "Time: " +
+    formattedMinutes +
+    ":" +
+    formattedSeconds;
+
+}
+
+
+/* Start timer */
+
+function startGameTimer() {
+
+  if (timerRunning) {
+    return;
+  }
+
+  if (gameCompleted) {
+    return;
+  }
+
+  timerRunning = true;
+
+  gameTimer =
+    setInterval(function() {
+
+      gameSeconds++;
+
+      updateGameTimerDisplay();
+
+    }, 1000);
+
+}
+
+
+/* Stop timer */
+
+function stopGameTimer() {
+
+  clearInterval(gameTimer);
+
+  gameTimer = null;
+
+  timerRunning = false;
+
+}
+
+/* Reset timer */
+
+function resetGameTimer() {
+
+  stopGameTimer();
+
+  gameSeconds = 0;
+
+  gameCompleted = false;
+
+  updateGameTimerDisplay();
+
+}
+/* Initial timer display */
+
+updateGameTimerDisplay();
+
+document
+  .querySelectorAll(".mode-card")
+  .forEach(function(button) {
+
+    button.addEventListener(
+      "click",
+      function() {
+
+        resetGameTimer();
+
+      }
+    );
+
+  });
+
+document
+  .getElementById("shuffleBtn")
+  .addEventListener(
+    "click",
+    function() {
+
+      resetGameTimer();
+
+    }
+  );
+
+
+document
+  .getElementById("resetBtn")
+  .addEventListener(
+    "click",
+    function() {
+
+      resetGameTimer();
+
+    }
+  );
+document
+  .getElementById("puzzleBoard")
+  .addEventListener(
+    "click",
+    function() {
+
+      if (
+        moveCount > 0 &&
+        !timerRunning &&
+        !gameCompleted
+      ) {
+
+        startGameTimer();
+
+      }
+
+      if (
+        typeof isSolved === "function" &&
+        isSolved()
+      ) {
+
+        finishTimer();
+
+      }
+
+    }
+  );
+
+function finishTimer() {
+
+  if (gameCompleted) {
+    return;
+  }
+
+  gameCompleted = true;
+
+  stopGameTimer();
+
+  updateGameTimerDisplay();
+
+}
+
+const hintButton =
+  document.getElementById("hintBtn");
+
+const hintCounter =
+  document.getElementById("hintCounter");
+
+
+let hintsRemaining = 3;
+
+function updateHintDisplay() {
+
+  hintCounter.textContent =
+    "Hints: " +
+    hintsRemaining;
+
+}
+
+function resetHints() {
+
+  hintsRemaining = 3;
+
+  updateHintDisplay();
+
+  clearHintHighlight();
+
+}
+
+function showMagicHint() {
+
+  if (gameCompleted) {
+    return;
+  }
+
+
+  if (hintsRemaining <= 0) {
+
+    alert(
+      "You have used all 3 Magic Hints!"
+    );
+
+    return;
+
+  }
+
+  const movableIndexes =
+    getMovableIndexes(emptyIndex);
+
+
+  if (movableIndexes.length === 0) {
+    return;
+  }
+  const randomIndex =
+    movableIndexes[
+      Math.floor(
+        Math.random() *
+        movableIndexes.length
+      )
+    ];
+
+
+  const tiles =
+    document.querySelectorAll(
+      "#puzzleBoard .tile"
+    );
+
+
+  const tile =
+    tiles[randomIndex];
+
+
+  if (!tile) {
+    return;
+  }
+  hintsRemaining--;
+
+  updateHintDisplay();
+
+  tile.classList.add(
+    "magic-hint"
+  );
+
+  setTimeout(
+    function() {
+
+      tile.classList.remove(
+        "magic-hint"
+      );
+
+    },
+    2000
+  );
+
+}
+
+hintButton.addEventListener(
+  "click",
+  showMagicHint
+);
+
+updateHintDisplay();
+
+document
+  .querySelectorAll(".mode-card")
+  .forEach(function(button) {
+
+    button.addEventListener(
+      "click",
+      function() {
+
+        resetHints();
+
+      }
+    );
+
+  });
+
+document
+  .getElementById("shuffleBtn")
+  .addEventListener(
+    "click",
+    function() {
+
+      resetHints();
+
+    }
+  );
+
+document
+  .getElementById("resetBtn")
+  .addEventListener(
+    "click",
+    function() {
+
+      resetHints();
+
+    }
+  );
+
+function clearHintHighlight() {
+
+  document
+    .querySelectorAll(".magic-hint")
+    .forEach(function(tile) {
+
+      tile.classList.remove(
+        "magic-hint"
+      );
+
+    });
+
+}
+
+const leaderboardSection =
+  document.createElement("section");
+
+leaderboardSection.id =
+  "database-leaderboard";
+
+leaderboardSection.className =
+  "database-leaderboard";
+
+
+leaderboardSection.innerHTML = `
+
+  <h2>Leaderboard</h2>
+
+  <p>
+    Best Paradise Escape scores
+  </p>
+
+  <div id="leaderboardResults">
+    Loading leaderboard...
+  </div>
+
+`;
+
+document
+  .querySelector("main")
+  .appendChild(
+    leaderboardSection
+  );
+
+function saveGameScore() {
+
+  const playerName =
+    document
+      .getElementById("playerName")
+      .value
+      .trim();
+
+
+  if (playerName === "") {
+    return;
+  }
+
+
+  const scoreData = {
+
+    playerName:
+      playerName,
+
+    mode:
+      selectedMode,
+
+    moves:
+      moveCount,
+
+    time:
+      gameSeconds
+
+  };
+
+
+  fetch(
+    "api.php",
+    {
+
+      method:
+        "POST",
+
+      headers: {
+
+        "Content-Type":
+          "application/json"
+
+      },
+
+      body:
+        JSON.stringify(scoreData)
+
+    }
+  )
+
+  .then(
+    function(response) {
+
+      return response.json();
+
+    }
+  )
+
+  .then(
+    function(data) {
+
+      if (data.success) {
+
+        loadLeaderboard();
+
+      }
+
+      else {
+
+        console.error(
+          data.message
+        );
+
+      }
+
+    }
+  )
+
+  .catch(
+    function(error) {
+
+      console.error(
+        "Unable to save score:",
+        error
+      );
+
+    }
+  );
+
+}
+function loadLeaderboard() {
+
+  fetch("api.php")
+
+    .then(
+      function(response) {
+
+        return response.json();
+
+      }
+    )
+
+    .then(
+      function(data) {
+
+        const results =
+          document.getElementById(
+            "leaderboardResults"
+          );
+
+
+        if (!data.success) {
+
+          results.textContent =
+            "Unable to load leaderboard.";
+
+          return;
+
+        }
+
+
+        if (
+          !data.scores ||
+          data.scores.length === 0
+        ) {
+
+          results.textContent =
+            "No scores yet. Be the first to play!";
+
+          return;
+
+        }
+
+
+        results.innerHTML = "";
+
+
+        const table =
+          document.createElement("table");
+
+
+        table.className =
+          "leaderboard-table";
+
+
+        const header =
+          document.createElement("tr");
+
+
+        const headings = [
+
+          "Rank",
+
+          "Player",
+
+          "Mode",
+
+          "Moves",
+
+          "Time",
+
+          "Date"
+
+        ];
+
+
+        headings.forEach(
+          function(title) {
+
+            const th =
+              document.createElement("th");
+
+            th.textContent =
+              title;
+
+            header.appendChild(th);
+
+          }
+        );
+
+
+        table.appendChild(header);
+
+
+        data.scores.forEach(
+          function(player, index) {
+
+            const row =
+              document.createElement("tr");
+
+
+            const rank =
+              document.createElement("td");
+
+            rank.textContent =
+              index + 1;
+
+
+            const name =
+              document.createElement("td");
+
+            name.textContent =
+              player.playerName;
+
+
+            const mode =
+              document.createElement("td");
+
+            mode.textContent =
+              formatPuzzleMode(
+                player.mode
+              );
+
+
+            const moves =
+              document.createElement("td");
+
+            moves.textContent =
+              player.moves;
+
+
+            const time =
+              document.createElement("td");
+
+            time.textContent =
+              formatLeaderboardTime(
+                player.time
+              );
+
+
+            const date =
+              document.createElement("td");
+
+            date.textContent =
+              player.completedAt;
+
+
+            row.appendChild(rank);
+
+            row.appendChild(name);
+
+            row.appendChild(mode);
+
+            row.appendChild(moves);
+
+            row.appendChild(time);
+
+            row.appendChild(date);
+
+
+            table.appendChild(row);
+
+          }
+        );
+
+
+        results.appendChild(table);
+
+      }
+    )
+
+    .catch(
+      function(error) {
+
+        console.error(
+          "Unable to load leaderboard:",
+          error
+        );
+
+
+        document
+          .getElementById(
+            "leaderboardResults"
+          )
+          .textContent =
+          "Leaderboard unavailable.";
+
+      }
+    );
+
+}
+function formatPuzzleMode(mode) {
+
+  if (mode === "tide") {
+
+    return "Tide Mode";
+
+  }
+
+
+  if (mode === "breeze") {
+
+    return "Ocean Breeze Mode";
+
+  }
+
+
+  if (mode === "sunshine") {
+
+    return "Sunshine Mode";
+
+  }
+
+
+  return mode;
+
+}
+
+function formatLeaderboardTime(seconds) {
+
+  const minutes =
+    Math.floor(seconds / 60);
+
+  const remainingSeconds =
+    seconds % 60;
+
+
+  return (
+    String(minutes).padStart(2, "0") +
+    ":" +
+    String(remainingSeconds).padStart(2, "0")
+  );
+
+}
+
+const winObserver =
+  new MutationObserver(
+    function() {
+
+      if (
+        !winMessageEl.hidden &&
+        isSolved() &&
+        !gameCompleted
+      ) {
+
+        finishTimer();
+
+        saveGameScore();
+
+      }
+
+    }
+  );
+  
+winObserver.observe(
+  winMessageEl,
+  {
+    childList: true,
+    subtree: true
+  }
+);
+
+loadLeaderboard();

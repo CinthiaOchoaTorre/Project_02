@@ -197,3 +197,144 @@ footer {
     gap: 0.4rem;
   }
 }
+
+.magic-hint {
+
+  animation:
+    magicHintPulse 0.5s infinite alternate;
+
+  outline:
+    4px solid var(--orange);
+
+  box-shadow:
+    0 0 15px var(--orange);
+
+}
+
+
+@keyframes magicHintPulse {
+
+  from {
+
+    transform: scale(0.95);
+
+  }
+
+  to {
+
+    transform: scale(1);
+
+  }
+
+}
+
+.database-leaderboard {
+
+  width:
+    min(95vw, 850px);
+
+  margin:
+    3rem auto;
+
+  padding:
+    1.5rem;
+
+  text-align:
+    center;
+
+  background-color:
+    white;
+
+  border:
+    2px solid var(--teal);
+
+  border-radius:
+    8px;
+
+}
+
+
+.database-leaderboard h2 {
+
+  color:
+    var(--teal-dark);
+
+  margin-top:
+    0;
+
+}
+
+.leaderboard-table {
+
+  width:
+    100%;
+
+  border-collapse:
+    collapse;
+
+  margin-top:
+    1.5rem;
+
+}
+
+
+.leaderboard-table th {
+
+  background-color:
+    var(--teal);
+
+  color:
+    white;
+
+  padding:
+    0.75rem;
+
+}
+
+
+.leaderboard-table td {
+
+  padding:
+    0.7rem;
+
+  border-bottom:
+    1px solid var(--sand-dark);
+
+}
+
+
+.leaderboard-table tr:nth-child(even) {
+
+  background-color:
+    var(--sand);
+
+}
+
+
+.leaderboard-table tr:hover {
+
+  background-color:
+    var(--sand-dark);
+
+}
+
+
+@media (max-width: 576px) {
+
+  .leaderboard-table {
+
+    font-size:
+      0.75rem;
+
+  }
+
+
+  .leaderboard-table th,
+  .leaderboard-table td {
+
+    padding:
+      0.4rem 0.25rem;
+
+  }
+
+}
