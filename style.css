@@ -199,6 +199,17 @@ body {
   opacity: 0.9;
 }
 
+/* Give Up gets a muted, less-inviting look than the main actions */
+#giveUpBtn {
+  background-color: #9aa3af;
+}
+
+/* "Did Not Finish" rows are dimmed so completed scores stand out */
+.leaderboard-table tr.dnf-row {
+  color: #9aa3af;
+  font-style: italic;
+}
+
 .win-message {
   margin-top: 1.2rem;
   font-size: 1.2rem;

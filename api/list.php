@@ -26,11 +26,13 @@ try {
             puzzle_mode,
             moves,
             completion_time,
+            status,
             completed_at
         FROM scores
         ORDER BY
-            completion_time ASC,
-            moves ASC
+            (status = 'completed') DESC,  -- completed games first
+            completion_time ASC,          -- then fastest time
+            moves ASC                     -- then fewest moves
         LIMIT 10
     ");
 
@@ -44,6 +46,7 @@ try {
                 "mode"        => $score["puzzle_mode"],
                 "moves"       => (int) $score["moves"],
                 "time"        => (int) $score["completion_time"],
+                "status"      => $score["status"],
                 "completedAt" => $score["completed_at"],
             ];
         }, $scores),

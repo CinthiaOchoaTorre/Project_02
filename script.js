@@ -58,6 +58,7 @@ const timerDisplayEl = document.getElementById("timerDisplay");
 const hintCounterEl = document.getElementById("hintCounter");
 const winMessageEl = document.getElementById("winMessage");
 const referenceImageEl = document.getElementById("referenceImage");
+const playerNameInput = document.getElementById("playerName");
 const leaderboardResultsEl = document.getElementById("leaderboardResults");
 
 
@@ -66,6 +67,14 @@ const leaderboardResultsEl = document.getElementById("leaderboardResults");
 // ============================================================
 document.querySelectorAll(".mode-card").forEach((btn) => {
   btn.addEventListener("click", () => {
+    // A name is required before any game can start.
+    const name = playerNameInput.value.trim();
+    if (name === "") {
+      alert("Please enter your name before starting a game.");
+      playerNameInput.focus();
+      return;
+    }
+
     selectedMode = btn.dataset.mode;
     setupPanel.hidden = true;
     gamePanel.hidden = false;
@@ -312,20 +321,39 @@ function showMagicHint() {
 document.getElementById("shuffleBtn").addEventListener("click", startNewGame);
 document.getElementById("resetBtn").addEventListener("click", startNewGame);
 document.getElementById("hintBtn").addEventListener("click", showMagicHint);
+document.getElementById("giveUpBtn").addEventListener("click", giveUp);
+
+// Give Up: record the current attempt as "Did Not Finish" and return to setup.
+function giveUp() {
+  if (gameCompleted) return; // already solved this game, nothing to give up
+
+  const confirmed = confirm("Give up this puzzle? It will be saved as 'Did Not Finish'.");
+  if (!confirmed) return;
+
+  gameCompleted = true;
+  stopTimer();
+  saveGameScore("dnf");
+
+  // Back to the setup screen so the player can start again.
+  gamePanel.hidden = true;
+  setupPanel.hidden = false;
+}
 
 
 // ============================================================
 // Leaderboard: save a score, then reload the table from MySQL
 // ============================================================
-function saveGameScore() {
-  const playerName = document.getElementById("playerName").value.trim();
-  if (playerName === "") return; // name is optional to play, required to save
+// status is "completed" (puzzle solved) or "dnf" (player gave up).
+function saveGameScore(status = "completed") {
+  const playerName = playerNameInput.value.trim();
+  if (playerName === "") return; // name is required (checked before starting too)
 
   const scoreData = {
     playerName: playerName,
     mode: selectedMode,
     moves: moveCount,
     time: gameSeconds,
+    status: status,
   };
 
   fetch("api/save.php", {
@@ -374,7 +402,7 @@ function renderLeaderboardTable(scores) {
 
   // Header row
   const headerRow = document.createElement("tr");
-  ["Rank", "Player", "Mode", "Moves", "Time", "Date"].forEach((title) => {
+  ["Rank", "Player", "Mode", "Moves", "Time", "Status", "Date"].forEach((title) => {
     const th = document.createElement("th");
     th.textContent = title;
     headerRow.appendChild(th);
@@ -383,13 +411,17 @@ function renderLeaderboardTable(scores) {
 
   // One row per score
   scores.forEach((player, index) => {
+    const isDnf = player.status === "dnf";
     const row = document.createElement("tr");
+    if (isDnf) row.classList.add("dnf-row");
+
     const cells = [
       index + 1,
       player.playerName,
       MODE_NAMES[player.mode] || player.mode,
-      player.moves,
-      formatTime(player.time),
+      isDnf ? "—" : player.moves,          // no meaningful moves for a DNF
+      isDnf ? "—" : formatTime(player.time), // no completion time for a DNF
+      isDnf ? "Did Not Finish" : "Completed",
       player.completedAt,
     ];
 

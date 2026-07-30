@@ -33,6 +33,7 @@ $playerName = trim($data["playerName"] ?? "");
 $mode       = $data["mode"] ?? "";
 $moves      = filter_var($data["moves"] ?? null, FILTER_VALIDATE_INT);
 $time       = filter_var($data["time"] ?? null, FILTER_VALIDATE_INT);
+$status     = $data["status"] ?? "completed"; // "completed" or "dnf"
 
 if ($playerName === "") {
     http_response_code(400);
@@ -65,11 +66,18 @@ if ($time === false || $time < 0) {
     exit;
 }
 
+$allowedStatuses = ["completed", "dnf"];
+if (!in_array($status, $allowedStatuses, true)) {
+    http_response_code(400);
+    echo json_encode(["success" => false, "message" => "Invalid status."]);
+    exit;
+}
+
 // ---------- Insert with a prepared statement (prevents SQL injection) ----------
 try {
     $statement = $pdo->prepare("
-        INSERT INTO scores (player_name, puzzle_mode, moves, completion_time)
-        VALUES (:player_name, :puzzle_mode, :moves, :completion_time)
+        INSERT INTO scores (player_name, puzzle_mode, moves, completion_time, status)
+        VALUES (:player_name, :puzzle_mode, :moves, :completion_time, :status)
     ");
 
     $statement->execute([
@@ -77,6 +85,7 @@ try {
         ":puzzle_mode"     => $mode,
         ":moves"           => $moves,
         ":completion_time" => $time,
+        ":status"          => $status,
     ]);
 
     echo json_encode(["success" => true, "message" => "Score saved."]);

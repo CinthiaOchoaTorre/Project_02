@@ -15,7 +15,15 @@ CREATE TABLE IF NOT EXISTS scores (
 
     completion_time INT NOT NULL,
 
+    -- 'completed' = puzzle solved, 'dnf' = player gave up (Did Not Finish)
+    status VARCHAR(12) NOT NULL DEFAULT 'completed',
+
     completed_at TIMESTAMP
         DEFAULT CURRENT_TIMESTAMP
 
 );
+
+
+-- If the scores table already existed before the status column was added,
+-- run this ONCE to add it (skip if the column is already there):
+-- ALTER TABLE scores ADD COLUMN status VARCHAR(12) NOT NULL DEFAULT 'completed';
