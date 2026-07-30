@@ -86,8 +86,7 @@ Then open <http://localhost:8000/index.html>.
 5. Solve the puzzle and your score is saved to the leaderboard automatically.
 
 ## Live Demo
-<!-- TODO: paste your deployed URL here -->
-_Deployed URL: (add your live link here)_
+[https://codd.cs.gsu.edu/~cochoatorre1/wp/Project_02/index.html](https://codd.cs.gsu.edu/~cochoatorre1/wp/Project_02/index.html)
 
 ## Repository
 https://github.com/CinthiaOchoaTorre/Project_02
