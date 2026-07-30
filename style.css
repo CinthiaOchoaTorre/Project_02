@@ -107,6 +107,36 @@ body {
   color: var(--teal-dark);
 }
 
+/* ---------- Game Area (board + reference side by side) ---------- */
+.game-area {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.reference {
+  margin: 0;
+  text-align: center;
+}
+
+.reference img {
+  width: min(40vw, 180px);
+  height: min(40vw, 180px);
+  object-fit: cover;
+  border: 3px solid var(--teal);
+  border-radius: 8px;
+  display: block;
+}
+
+.reference figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--teal-dark);
+  font-weight: bold;
+}
+
 /* ---------- Puzzle Board ---------- */
 .puzzle-board {
   display: grid;

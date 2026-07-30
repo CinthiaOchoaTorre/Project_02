@@ -57,6 +57,7 @@ const moveCounterEl = document.getElementById("moveCounter");
 const timerDisplayEl = document.getElementById("timerDisplay");
 const hintCounterEl = document.getElementById("hintCounter");
 const winMessageEl = document.getElementById("winMessage");
+const referenceImageEl = document.getElementById("referenceImage");
 const leaderboardResultsEl = document.getElementById("leaderboardResults");
 
 
@@ -86,6 +87,10 @@ function createSolvedBoard() {
 function startNewGame() {
   board = createSolvedBoard();
   emptyIndex = EMPTY;
+
+  // Show the full picture for this mode as a "goal" reference.
+  referenceImageEl.src = MODE_IMAGES[selectedMode];
+
   shuffleBoard();
 
   resetTimer();
