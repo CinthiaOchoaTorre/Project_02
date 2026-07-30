@@ -1,71 +1,133 @@
-// ================= Paradise Escape - Core Puzzle Logic =================
-// Days 3-5 deliverable: board state, rendering, tile movement, solvable
-// shuffle, and reset. (Timer, move counter wiring, and Magic Hint are
-// Days 6-7 and will be added on top of this.)
+// ============================================================
+// Paradise Escape - Beach-Themed 15 Puzzle
+// ------------------------------------------------------------
+// This file runs the whole game in the browser:
+//   - lets the player pick a name and a puzzle mode
+//   - builds a 4x4 image puzzle and shuffles it (always solvable)
+//   - tracks moves and time, offers a limited "Magic Hint"
+//   - detects when the puzzle is solved
+//   - sends the score to api.php and shows the MySQL leaderboard
+// ============================================================
 
-const BOARD_SIZE = 4;               // 4x4 grid
-const EMPTY = BOARD_SIZE * BOARD_SIZE - 1; // 15 = the empty slot's value
 
-let board = [];        // flat array of length 16, values 0-15 (15 = empty)
-let emptyIndex = EMPTY;
-let selectedMode = null;
+// ---------- Configuration ----------
+const BOARD_SIZE = 4;                        // 4x4 grid
+const TILE_COUNT = BOARD_SIZE * BOARD_SIZE;  // 16 slots total
+const EMPTY = TILE_COUNT - 1;                // value 15 represents the empty slot
+const SHUFFLE_MOVES = 200;                   // random valid moves used to shuffle
+const MAX_HINTS = 3;                         // Magic Hints allowed per game
+
+// Each puzzle mode uses its own beach photo. The image is sliced
+// across the 16 tiles, so a different mode = a different picture.
+const MODE_IMAGES = {
+  tide: "images/tide_mode.jpg",
+  breeze: "images/ocean_waves.jpg",
+  sunshine: "images/sunshine_mode.jpg",
+};
+
+// Human-readable names, used on the leaderboard.
+const MODE_NAMES = {
+  tide: "Tide Mode",
+  breeze: "Ocean Breeze Mode",
+  sunshine: "Sunshine Mode",
+};
+
+
+// ---------- Game state ----------
+let board = [];             // flat array of 16 values (0-15); 15 = empty slot
+let emptyIndex = EMPTY;     // where the empty slot currently sits
+let selectedMode = null;    // "tide" | "breeze" | "sunshine"
 let moveCount = 0;
+let gameCompleted = false;
 
+// Timer state
+let gameTimer = null;
+let gameSeconds = 0;
+let timerRunning = false;
+
+// Hint state
+let hintsRemaining = MAX_HINTS;
+
+
+// ---------- DOM references ----------
+const setupPanel = document.getElementById("setup-panel");
+const gamePanel = document.getElementById("game-panel");
 const boardEl = document.getElementById("puzzleBoard");
 const moveCounterEl = document.getElementById("moveCounter");
+const timerDisplayEl = document.getElementById("timerDisplay");
+const hintCounterEl = document.getElementById("hintCounter");
 const winMessageEl = document.getElementById("winMessage");
+const leaderboardResultsEl = document.getElementById("leaderboardResults");
 
-// ---------- Setup: mode selection ----------
+
+// ============================================================
+// Mode selection -> start a new game
+// ============================================================
 document.querySelectorAll(".mode-card").forEach((btn) => {
   btn.addEventListener("click", () => {
     selectedMode = btn.dataset.mode;
-    document.getElementById("setup-panel").hidden = true;
-    document.getElementById("game-panel").hidden = false;
+    setupPanel.hidden = true;
+    gamePanel.hidden = false;
     startNewGame();
   });
 });
 
-// ---------- Board creation ----------
+
+// ============================================================
+// Building and shuffling the board
+// ============================================================
+
+// The solved board is just 0,1,2,...,15 in order.
 function createSolvedBoard() {
-  return Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, i) => i);
+  return Array.from({ length: TILE_COUNT }, (_, i) => i);
 }
 
+// Start (or restart) a game: solved board -> shuffle -> reset all counters.
 function startNewGame() {
   board = createSolvedBoard();
   emptyIndex = EMPTY;
-  moveCount = 0;
   shuffleBoard();
+
+  resetTimer();
+  resetHints();
+  winMessageEl.hidden = true;
+  gameCompleted = false;
+
   render();
+  updateMoveCounter();
 }
 
-// ---------- Solvable shuffle ----------
-// Instead of randomizing tile order directly (which can produce an
-// unsolvable arrangement), we shuffle by making many random *valid* moves
-// starting from the solved state. Every board reached this way is
-// guaranteed solvable.
+// A random slide-puzzle is only solvable for half of all tile orders,
+// so instead of shuffling the numbers directly we start from the solved
+// board and make many random *legal* moves. Every board reached this way
+// is guaranteed solvable.
 function shuffleBoard() {
-  const SHUFFLE_MOVES = 200;
   for (let i = 0; i < SHUFFLE_MOVES; i++) {
     const neighbors = getMovableIndexes(emptyIndex);
     const randomNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
     swapTiles(randomNeighbor, emptyIndex);
   }
-  moveCount = 0; // shuffling itself doesn't count toward the player's moves
+  moveCount = 0; // shuffling should not count as player moves
 }
 
-// ---------- Movement logic ----------
+
+// ============================================================
+// Movement logic
+// ============================================================
+
 function getRowCol(index) {
   return { row: Math.floor(index / BOARD_SIZE), col: index % BOARD_SIZE };
 }
 
+// Indexes of the tiles directly above/below/left/right of the empty slot.
 function getMovableIndexes(empty) {
   const { row, col } = getRowCol(empty);
   const candidates = [];
 
-  if (row > 0) candidates.push(empty - BOARD_SIZE);            // above
-  if (row < BOARD_SIZE - 1) candidates.push(empty + BOARD_SIZE); // below
-  if (col > 0) candidates.push(empty - 1);                      // left
-  if (col < BOARD_SIZE - 1) candidates.push(empty + 1);         // right
+  if (row > 0) candidates.push(empty - BOARD_SIZE);             // tile above
+  if (row < BOARD_SIZE - 1) candidates.push(empty + BOARD_SIZE); // tile below
+  if (col > 0) candidates.push(empty - 1);                       // tile to the left
+  if (col < BOARD_SIZE - 1) candidates.push(empty + 1);          // tile to the right
 
   return candidates;
 }
@@ -74,33 +136,59 @@ function isAdjacentToEmpty(index) {
   return getMovableIndexes(emptyIndex).includes(index);
 }
 
+// Swap two board slots and keep track of where the empty slot moved to.
 function swapTiles(a, b) {
   [board[a], board[b]] = [board[b], board[a]];
   if (board[a] === EMPTY) emptyIndex = a;
   if (board[b] === EMPTY) emptyIndex = b;
 }
 
+// Runs when the player clicks a tile.
 function handleTileClick(index) {
-  if (!isAdjacentToEmpty(index)) return; // invalid move, ignore
+  if (gameCompleted) return;
+  if (!isAdjacentToEmpty(index)) return; // not next to the empty slot -> ignore
 
   swapTiles(index, emptyIndex);
   moveCount++;
   updateMoveCounter();
+
+  // Start the timer on the very first move of the game.
+  if (moveCount === 1) startTimer();
+
   render();
 
-  if (isSolved()) {
-    showWinMessage();
-  }
+  if (isSolved()) handleWin();
 }
 
-// ---------- Solved-state check ----------
+// The board is solved when every value sits in its own index (0 at 0, etc.).
 function isSolved() {
   return board.every((value, index) => value === index);
 }
 
-// ---------- Rendering ----------
+
+// ============================================================
+// Winning: stop the clock, show a message, save the score
+// ============================================================
+function handleWin() {
+  if (gameCompleted) return;
+  gameCompleted = true;
+
+  stopTimer();
+
+  winMessageEl.hidden = false;
+  winMessageEl.textContent =
+    `You solved it in ${moveCount} moves and ${formatTime(gameSeconds)}!`;
+
+  saveGameScore();
+}
+
+
+// ============================================================
+// Rendering the board as image tiles
+// ============================================================
 function render() {
   boardEl.innerHTML = "";
+  const imageUrl = MODE_IMAGES[selectedMode];
 
   board.forEach((value, index) => {
     const tile = document.createElement("div");
@@ -109,7 +197,17 @@ function render() {
     if (value === EMPTY) {
       tile.classList.add("empty");
     } else {
-      tile.textContent = value + 1; // placeholder numeric label
+      // A tile's picture slice is decided by its *solved* position (value),
+      // not where it currently sits. background-size 400% makes the full
+      // image span 4 tiles; the position picks which quarter to show.
+      const solvedRow = Math.floor(value / BOARD_SIZE);
+      const solvedCol = value % BOARD_SIZE;
+
+      tile.style.backgroundImage = `url("${imageUrl}")`;
+      tile.style.backgroundSize = `${BOARD_SIZE * 100}% ${BOARD_SIZE * 100}%`;
+      tile.style.backgroundPosition =
+        `${(solvedCol / (BOARD_SIZE - 1)) * 100}% ${(solvedRow / (BOARD_SIZE - 1)) * 100}%`;
+
       tile.addEventListener("click", () => handleTileClick(index));
     }
 
@@ -121,731 +219,189 @@ function updateMoveCounter() {
   moveCounterEl.textContent = `Moves: ${moveCount}`;
 }
 
-function showWinMessage() {
-  winMessageEl.hidden = false;
-  winMessageEl.textContent = `Solved in ${moveCount} moves!`;
-  // Score-saving to the PHP/MySQL leaderboard API is added in Days 8-9.
+
+// ============================================================
+// Timer
+// ============================================================
+
+// Format a number of seconds as MM:SS.
+function formatTime(totalSeconds) {
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
 }
 
-// ---------- Controls: Shuffle / Reset ----------
-document.getElementById("shuffleBtn").addEventListener("click", () => {
-  winMessageEl.hidden = true;
-  moveCount = 0;
-  updateMoveCounter();
-  shuffleBoard();
-  render();
-});
-
-document.getElementById("resetBtn").addEventListener("click", () => {
-  winMessageEl.hidden = true;
-  startNewGame();
-  updateMoveCounter();
-});
-
-let gameTimer = null;
-let gameSeconds = 0;
-let timerRunning = false;
-let gameCompleted = false;
-
-
-/* Get timer element */
-
-const timerDisplay =
-  document.getElementById("timerDisplay");
-
-
-/* Update timer display */
-
-function updateGameTimerDisplay() {
-
-  const minutes =
-    Math.floor(gameSeconds / 60);
-
-  const seconds =
-    gameSeconds % 60;
-
-  const formattedMinutes =
-    String(minutes).padStart(2, "0");
-
-  const formattedSeconds =
-    String(seconds).padStart(2, "0");
-
-  timerDisplay.textContent =
-    "Time: " +
-    formattedMinutes +
-    ":" +
-    formattedSeconds;
-
+function updateTimerDisplay() {
+  timerDisplayEl.textContent = `Time: ${formatTime(gameSeconds)}`;
 }
 
-
-/* Start timer */
-
-function startGameTimer() {
-
-  if (timerRunning) {
-    return;
-  }
-
-  if (gameCompleted) {
-    return;
-  }
-
+function startTimer() {
+  if (timerRunning || gameCompleted) return;
   timerRunning = true;
-
-  gameTimer =
-    setInterval(function() {
-
-      gameSeconds++;
-
-      updateGameTimerDisplay();
-
-    }, 1000);
-
+  gameTimer = setInterval(() => {
+    gameSeconds++;
+    updateTimerDisplay();
+  }, 1000);
 }
 
-
-/* Stop timer */
-
-function stopGameTimer() {
-
+function stopTimer() {
   clearInterval(gameTimer);
-
   gameTimer = null;
-
   timerRunning = false;
-
 }
 
-/* Reset timer */
-
-function resetGameTimer() {
-
-  stopGameTimer();
-
+function resetTimer() {
+  stopTimer();
   gameSeconds = 0;
-
-  gameCompleted = false;
-
-  updateGameTimerDisplay();
-
-}
-/* Initial timer display */
-
-updateGameTimerDisplay();
-
-document
-  .querySelectorAll(".mode-card")
-  .forEach(function(button) {
-
-    button.addEventListener(
-      "click",
-      function() {
-
-        resetGameTimer();
-
-      }
-    );
-
-  });
-
-document
-  .getElementById("shuffleBtn")
-  .addEventListener(
-    "click",
-    function() {
-
-      resetGameTimer();
-
-    }
-  );
-
-
-document
-  .getElementById("resetBtn")
-  .addEventListener(
-    "click",
-    function() {
-
-      resetGameTimer();
-
-    }
-  );
-document
-  .getElementById("puzzleBoard")
-  .addEventListener(
-    "click",
-    function() {
-
-      if (
-        moveCount > 0 &&
-        !timerRunning &&
-        !gameCompleted
-      ) {
-
-        startGameTimer();
-
-      }
-
-      if (
-        typeof isSolved === "function" &&
-        isSolved()
-      ) {
-
-        finishTimer();
-
-      }
-
-    }
-  );
-
-function finishTimer() {
-
-  if (gameCompleted) {
-    return;
-  }
-
-  gameCompleted = true;
-
-  stopGameTimer();
-
-  updateGameTimerDisplay();
-
+  updateTimerDisplay();
 }
 
-const hintButton =
-  document.getElementById("hintBtn");
 
-const hintCounter =
-  document.getElementById("hintCounter");
-
-
-let hintsRemaining = 3;
-
+// ============================================================
+// Magic Hint (limited to MAX_HINTS per game)
+// Briefly highlights a tile the player is allowed to move.
+// ============================================================
 function updateHintDisplay() {
-
-  hintCounter.textContent =
-    "Hints: " +
-    hintsRemaining;
-
+  hintCounterEl.textContent = `Hints: ${hintsRemaining}`;
 }
 
 function resetHints() {
-
-  hintsRemaining = 3;
-
+  hintsRemaining = MAX_HINTS;
   updateHintDisplay();
-
   clearHintHighlight();
+}
 
+function clearHintHighlight() {
+  document.querySelectorAll(".magic-hint").forEach((tile) => {
+    tile.classList.remove("magic-hint");
+  });
 }
 
 function showMagicHint() {
-
-  if (gameCompleted) {
-    return;
-  }
-
+  if (gameCompleted) return;
 
   if (hintsRemaining <= 0) {
-
-    alert(
-      "You have used all 3 Magic Hints!"
-    );
-
-    return;
-
-  }
-
-  const movableIndexes =
-    getMovableIndexes(emptyIndex);
-
-
-  if (movableIndexes.length === 0) {
+    alert("You have used all 3 Magic Hints!");
     return;
   }
+
+  const movableIndexes = getMovableIndexes(emptyIndex);
+  if (movableIndexes.length === 0) return;
+
   const randomIndex =
-    movableIndexes[
-      Math.floor(
-        Math.random() *
-        movableIndexes.length
-      )
-    ];
+    movableIndexes[Math.floor(Math.random() * movableIndexes.length)];
+  const tile = document.querySelectorAll("#puzzleBoard .tile")[randomIndex];
+  if (!tile) return;
 
-
-  const tiles =
-    document.querySelectorAll(
-      "#puzzleBoard .tile"
-    );
-
-
-  const tile =
-    tiles[randomIndex];
-
-
-  if (!tile) {
-    return;
-  }
   hintsRemaining--;
-
   updateHintDisplay();
 
-  tile.classList.add(
-    "magic-hint"
-  );
-
-  setTimeout(
-    function() {
-
-      tile.classList.remove(
-        "magic-hint"
-      );
-
-    },
-    2000
-  );
-
+  tile.classList.add("magic-hint");
+  setTimeout(() => tile.classList.remove("magic-hint"), 2000);
 }
 
-hintButton.addEventListener(
-  "click",
-  showMagicHint
-);
 
-updateHintDisplay();
-
-document
-  .querySelectorAll(".mode-card")
-  .forEach(function(button) {
-
-    button.addEventListener(
-      "click",
-      function() {
-
-        resetHints();
-
-      }
-    );
-
-  });
-
-document
-  .getElementById("shuffleBtn")
-  .addEventListener(
-    "click",
-    function() {
-
-      resetHints();
-
-    }
-  );
-
-document
-  .getElementById("resetBtn")
-  .addEventListener(
-    "click",
-    function() {
-
-      resetHints();
-
-    }
-  );
-
-function clearHintHighlight() {
-
-  document
-    .querySelectorAll(".magic-hint")
-    .forEach(function(tile) {
-
-      tile.classList.remove(
-        "magic-hint"
-      );
-
-    });
-
-}
-
-const leaderboardSection =
-  document.createElement("section");
-
-leaderboardSection.id =
-  "database-leaderboard";
-
-leaderboardSection.className =
-  "database-leaderboard";
+// ============================================================
+// Controls: Shuffle / Reset / Magic Hint
+// ============================================================
+document.getElementById("shuffleBtn").addEventListener("click", startNewGame);
+document.getElementById("resetBtn").addEventListener("click", startNewGame);
+document.getElementById("hintBtn").addEventListener("click", showMagicHint);
 
 
-leaderboardSection.innerHTML = `
-
-  <h2>Leaderboard</h2>
-
-  <p>
-    Best Paradise Escape scores
-  </p>
-
-  <div id="leaderboardResults">
-    Loading leaderboard...
-  </div>
-
-`;
-
-document
-  .querySelector("main")
-  .appendChild(
-    leaderboardSection
-  );
-
+// ============================================================
+// Leaderboard: save a score, then reload the table from MySQL
+// ============================================================
 function saveGameScore() {
-
-  const playerName =
-    document
-      .getElementById("playerName")
-      .value
-      .trim();
-
-
-  if (playerName === "") {
-    return;
-  }
-
+  const playerName = document.getElementById("playerName").value.trim();
+  if (playerName === "") return; // name is optional to play, required to save
 
   const scoreData = {
-
-    playerName:
-      playerName,
-
-    mode:
-      selectedMode,
-
-    moves:
-      moveCount,
-
-    time:
-      gameSeconds
-
+    playerName: playerName,
+    mode: selectedMode,
+    moves: moveCount,
+    time: gameSeconds,
   };
 
-
-  fetch(
-    "api.php",
-    {
-
-      method:
-        "POST",
-
-      headers: {
-
-        "Content-Type":
-          "application/json"
-
-      },
-
-      body:
-        JSON.stringify(scoreData)
-
-    }
-  )
-
-  .then(
-    function(response) {
-
-      return response.json();
-
-    }
-  )
-
-  .then(
-    function(data) {
-
+  fetch("api/save.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(scoreData),
+  })
+    .then((response) => response.json())
+    .then((data) => {
       if (data.success) {
-
         loadLeaderboard();
-
+      } else {
+        console.error(data.message);
       }
-
-      else {
-
-        console.error(
-          data.message
-        );
-
-      }
-
-    }
-  )
-
-  .catch(
-    function(error) {
-
-      console.error(
-        "Unable to save score:",
-        error
-      );
-
-    }
-  );
-
+    })
+    .catch((error) => console.error("Unable to save score:", error));
 }
+
 function loadLeaderboard() {
-
-  fetch("api.php")
-
-    .then(
-      function(response) {
-
-        return response.json();
-
+  fetch("api/list.php")
+    .then((response) => response.json())
+    .then((data) => {
+      if (!data.success) {
+        leaderboardResultsEl.textContent = "Unable to load leaderboard.";
+        return;
       }
-    )
 
-    .then(
-      function(data) {
-
-        const results =
-          document.getElementById(
-            "leaderboardResults"
-          );
-
-
-        if (!data.success) {
-
-          results.textContent =
-            "Unable to load leaderboard.";
-
-          return;
-
-        }
-
-
-        if (
-          !data.scores ||
-          data.scores.length === 0
-        ) {
-
-          results.textContent =
-            "No scores yet. Be the first to play!";
-
-          return;
-
-        }
-
-
-        results.innerHTML = "";
-
-
-        const table =
-          document.createElement("table");
-
-
-        table.className =
-          "leaderboard-table";
-
-
-        const header =
-          document.createElement("tr");
-
-
-        const headings = [
-
-          "Rank",
-
-          "Player",
-
-          "Mode",
-
-          "Moves",
-
-          "Time",
-
-          "Date"
-
-        ];
-
-
-        headings.forEach(
-          function(title) {
-
-            const th =
-              document.createElement("th");
-
-            th.textContent =
-              title;
-
-            header.appendChild(th);
-
-          }
-        );
-
-
-        table.appendChild(header);
-
-
-        data.scores.forEach(
-          function(player, index) {
-
-            const row =
-              document.createElement("tr");
-
-
-            const rank =
-              document.createElement("td");
-
-            rank.textContent =
-              index + 1;
-
-
-            const name =
-              document.createElement("td");
-
-            name.textContent =
-              player.playerName;
-
-
-            const mode =
-              document.createElement("td");
-
-            mode.textContent =
-              formatPuzzleMode(
-                player.mode
-              );
-
-
-            const moves =
-              document.createElement("td");
-
-            moves.textContent =
-              player.moves;
-
-
-            const time =
-              document.createElement("td");
-
-            time.textContent =
-              formatLeaderboardTime(
-                player.time
-              );
-
-
-            const date =
-              document.createElement("td");
-
-            date.textContent =
-              player.completedAt;
-
-
-            row.appendChild(rank);
-
-            row.appendChild(name);
-
-            row.appendChild(mode);
-
-            row.appendChild(moves);
-
-            row.appendChild(time);
-
-            row.appendChild(date);
-
-
-            table.appendChild(row);
-
-          }
-        );
-
-
-        results.appendChild(table);
-
+      if (!data.scores || data.scores.length === 0) {
+        leaderboardResultsEl.textContent = "No scores yet. Be the first to play!";
+        return;
       }
-    )
 
-    .catch(
-      function(error) {
-
-        console.error(
-          "Unable to load leaderboard:",
-          error
-        );
-
-
-        document
-          .getElementById(
-            "leaderboardResults"
-          )
-          .textContent =
-          "Leaderboard unavailable.";
-
-      }
-    );
-
-}
-function formatPuzzleMode(mode) {
-
-  if (mode === "tide") {
-
-    return "Tide Mode";
-
-  }
-
-
-  if (mode === "breeze") {
-
-    return "Ocean Breeze Mode";
-
-  }
-
-
-  if (mode === "sunshine") {
-
-    return "Sunshine Mode";
-
-  }
-
-
-  return mode;
-
+      renderLeaderboardTable(data.scores);
+    })
+    .catch((error) => {
+      console.error("Unable to load leaderboard:", error);
+      leaderboardResultsEl.textContent = "Leaderboard unavailable.";
+    });
 }
 
-function formatLeaderboardTime(seconds) {
+function renderLeaderboardTable(scores) {
+  leaderboardResultsEl.innerHTML = "";
 
-  const minutes =
-    Math.floor(seconds / 60);
+  const table = document.createElement("table");
+  table.className = "leaderboard-table";
 
-  const remainingSeconds =
-    seconds % 60;
+  // Header row
+  const headerRow = document.createElement("tr");
+  ["Rank", "Player", "Mode", "Moves", "Time", "Date"].forEach((title) => {
+    const th = document.createElement("th");
+    th.textContent = title;
+    headerRow.appendChild(th);
+  });
+  table.appendChild(headerRow);
 
+  // One row per score
+  scores.forEach((player, index) => {
+    const row = document.createElement("tr");
+    const cells = [
+      index + 1,
+      player.playerName,
+      MODE_NAMES[player.mode] || player.mode,
+      player.moves,
+      formatTime(player.time),
+      player.completedAt,
+    ];
 
-  return (
-    String(minutes).padStart(2, "0") +
-    ":" +
-    String(remainingSeconds).padStart(2, "0")
-  );
+    cells.forEach((value) => {
+      const td = document.createElement("td");
+      td.textContent = value;
+      row.appendChild(td);
+    });
 
+    table.appendChild(row);
+  });
+
+  leaderboardResultsEl.appendChild(table);
 }
 
-const winObserver =
-  new MutationObserver(
-    function() {
 
-      if (
-        !winMessageEl.hidden &&
-        isSolved() &&
-        !gameCompleted
-      ) {
-
-        finishTimer();
-
-        saveGameScore();
-
-      }
-
-    }
-  );
-  
-winObserver.observe(
-  winMessageEl,
-  {
-    childList: true,
-    subtree: true
-  }
-);
-
+// ---------- Page load ----------
+updateTimerDisplay();
+updateHintDisplay();
 loadLeaderboard();
