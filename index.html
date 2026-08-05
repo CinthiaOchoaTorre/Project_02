@@ -19,11 +19,30 @@
   <main>
     <section id="setup-panel">
       <h1>Paradise Escape</h1>
-      <p class="tagline">A Beach-Themed 15 Puzzle</p>
+      <p class="tagline">A Beach-Themed Sliding Puzzle</p>
 
       <label for="playerName">Enter your name:</label>
       <input type="text" id="playerName" placeholder="Player name" maxlength="20">
 
+      <!-- Difficulty changes the size of the board, how hard the
+           shuffle is, and how many Magic Hints you get. -->
+      <h2 class="setup-heading">1. Choose a difficulty</h2>
+      <div class="difficulty-options" id="difficultyOptions">
+        <button type="button" class="difficulty-card" data-difficulty="easy" aria-pressed="false">
+          <span class="difficulty-name">Easy</span>
+          <span class="difficulty-detail">3 &times; 3 board &middot; 5 hints</span>
+        </button>
+        <button type="button" class="difficulty-card is-selected" data-difficulty="medium" aria-pressed="true">
+          <span class="difficulty-name">Medium</span>
+          <span class="difficulty-detail">4 &times; 4 board &middot; 3 hints</span>
+        </button>
+        <button type="button" class="difficulty-card" data-difficulty="hard" aria-pressed="false">
+          <span class="difficulty-name">Hard</span>
+          <span class="difficulty-detail">5 &times; 5 board &middot; 2 hints</span>
+        </button>
+      </div>
+
+      <h2 class="setup-heading">2. Pick a mode to start</h2>
       <div class="mode-cards">
         <button class="mode-card" data-mode="tide">Tide Mode</button>
         <button class="mode-card" data-mode="breeze">Ocean Breeze Mode</button>
@@ -33,8 +52,9 @@
 
     <section id="game-panel" hidden>
       <div class="status-bar">
+        <span id="difficultyDisplay">Difficulty: Medium</span>
         <span id="moveCounter">Moves: 0</span>
-        <span id="timerDisplay">Time: 0s</span>
+        <span id="timerDisplay">Time: 00:00</span>
         <span id="hintCounter">Hints: 3</span>
       </div>
 
@@ -48,10 +68,11 @@
       </div>
 
       <div class="controls">
-        <button id="shuffleBtn">Shuffle</button>
-        <button id="resetBtn">Reset</button>
+        <button id="shuffleBtn" title="Scramble a brand-new puzzle">Shuffle</button>
+        <button id="resetBtn" title="Put this same puzzle back to how it started">Reset</button>
         <button id="hintBtn">Magic Hint</button>
         <button id="giveUpBtn">Give Up</button>
+        <button id="menuBtn">Change Difficulty</button>
       </div>
 
       <p id="winMessage" class="win-message" hidden>You solved it!</p>
@@ -60,6 +81,7 @@
     <section id="leaderboard" class="database-leaderboard">
       <h2>Leaderboard</h2>
       <p>Best Paradise Escape scores</p>
+      <p id="storageNotice" class="storage-notice" hidden></p>
       <div id="leaderboardResults">Loading leaderboard...</div>
     </section>
   </main>
