@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Paradise Escape - 15 Puzzle</title>
-  <link rel="stylesheet" href="style.css">
+  <!-- ?v= is a cache buster: bump the number after uploading changes so
+       browsers cannot keep serving an old copy of the CSS/JS. -->
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 
@@ -58,6 +60,11 @@
         <span id="hintCounter">Hints: 3</span>
       </div>
 
+      <!-- The puzzle ID stays the same when you press Reset and changes
+           when you press Shuffle, which is what makes the difference
+           between the two buttons visible. -->
+      <p id="puzzleIdDisplay" class="puzzle-id"></p>
+
       <div class="game-area">
         <div id="puzzleBoard" class="puzzle-board"></div>
 
@@ -68,12 +75,14 @@
       </div>
 
       <div class="controls">
-        <button id="shuffleBtn" title="Scramble a brand-new puzzle">Shuffle</button>
-        <button id="resetBtn" title="Put this same puzzle back to how it started">Reset</button>
+        <button id="shuffleBtn" title="Scramble a brand-new puzzle">Shuffle<small>new puzzle</small></button>
+        <button id="resetBtn" title="Put this same puzzle back to how it started">Reset<small>same puzzle again</small></button>
         <button id="hintBtn">Magic Hint</button>
         <button id="giveUpBtn">Give Up</button>
         <button id="menuBtn">Change Difficulty</button>
       </div>
+
+      <p id="actionMessage" class="action-message" hidden></p>
 
       <p id="winMessage" class="win-message" hidden>You solved it!</p>
     </section>
@@ -90,6 +99,6 @@
     <p>CSC 4370/6370 - Project 2 Final - Summer 2026</p>
   </footer>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=2"></script>
 </body>
 </html>

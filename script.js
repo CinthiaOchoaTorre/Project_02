@@ -55,6 +55,12 @@ let board = [];             // flat array of tile values; emptyValue = empty slo
 let startingBoard = [];     // snapshot taken right after the shuffle (used by Reset)
 let emptyIndex = 0;         // where the empty slot currently sits
 
+// A short code identifying the current scramble. Reset keeps it,
+// Shuffle replaces it - that is how the player can tell the two
+// buttons apart, since both leave a scrambled board on screen.
+let puzzleId = "";
+let attemptNumber = 1;
+
 let selectedMode = null;                    // "tide" | "breeze" | "sunshine"
 let selectedDifficulty = DEFAULT_DIFFICULTY; // "easy" | "medium" | "hard"
 
@@ -81,6 +87,8 @@ const hintCounterEl = document.getElementById("hintCounter");
 const difficultyDisplayEl = document.getElementById("difficultyDisplay");
 const winMessageEl = document.getElementById("winMessage");
 const referenceImageEl = document.getElementById("referenceImage");
+const puzzleIdDisplayEl = document.getElementById("puzzleIdDisplay");
+const actionMessageEl = document.getElementById("actionMessage");
 const playerNameInput = document.getElementById("playerName");
 const leaderboardResultsEl = document.getElementById("leaderboardResults");
 const storageNoticeEl = document.getElementById("storageNotice");
@@ -166,7 +174,12 @@ function startNewGame() {
   // Remember this exact scramble so Reset can bring it back.
   startingBoard = board.slice();
 
+  // A new scramble means a new puzzle ID and a fresh attempt count.
+  puzzleId = makePuzzleId(startingBoard);
+  attemptNumber = 1;
+
   resetProgress();
+  showActionMessage(`New puzzle shuffled - this is Puzzle #${puzzleId}.`);
 }
 
 // RESET: put the *same* puzzle back to the layout it started with.
@@ -178,7 +191,35 @@ function resetCurrentGame() {
   board = startingBoard.slice();
   emptyIndex = board.indexOf(emptyValue);
 
+  // Same scramble, so the puzzle ID does NOT change - only the attempt.
+  attemptNumber++;
+
   resetProgress();
+  showActionMessage(
+    `Puzzle #${puzzleId} restored to its starting layout - attempt ${attemptNumber}. ` +
+    `(Shuffle would have given you a different puzzle.)`
+  );
+}
+
+// Turn a scramble into a short, stable code like "3F9C" so the player
+// can see at a glance that Reset kept the same puzzle.
+function makePuzzleId(layout) {
+  let hash = 0;
+  layout.forEach((value, index) => {
+    hash = (hash * 31 + (value + 1) * (index + 1)) % 0xffff;
+  });
+  return hash.toString(16).toUpperCase().padStart(4, "0");
+}
+
+function updatePuzzleIdDisplay() {
+  puzzleIdDisplayEl.textContent =
+    `Puzzle #${puzzleId} · Attempt ${attemptNumber}`;
+}
+
+// A short line under the controls explaining what the last button did.
+function showActionMessage(message) {
+  actionMessageEl.textContent = message;
+  actionMessageEl.hidden = false;
 }
 
 // Shared by Shuffle and Reset: zero the counters and redraw.
@@ -192,6 +233,7 @@ function resetProgress() {
 
   render();
   updateMoveCounter();
+  updatePuzzleIdDisplay();
 }
 
 // A random slide-puzzle is only solvable for half of all tile orders,
@@ -249,9 +291,23 @@ function handleTileClick(index) {
   if (gameCompleted) return;
   if (!isAdjacentToEmpty(index)) return; // not next to the empty slot -> ignore
 
+  // If the player made the move the hint asked for, keep the rest of
+  // the plan so the next hint is instant; otherwise the plan is stale.
+  if (hintPlan.length > 0 && hintPlan[0] === index) {
+    hintPlan = hintPlan.slice(1);
+  } else {
+    hintPlan = [];
+    hintPlanKey = "";
+  }
+
+  clearHintHighlight();
+
   swapTiles(index, emptyIndex);
   moveCount++;
   updateMoveCounter();
+
+  // The plan was written for the layout before this move.
+  if (hintPlan.length > 0) hintPlanKey = board.join(",");
 
   // Start the timer on the very first move of the game.
   if (moveCount === 1) startTimer();
@@ -299,6 +355,13 @@ function render() {
     if (value === emptyValue) {
       tile.classList.add("empty");
     } else {
+      // The hint lives in `hintIndex` rather than on the element, so a
+      // redraw cannot wipe it. It stays put until the player moves.
+      if (index === hintIndex) {
+        tile.classList.add("magic-hint");
+        tile.textContent = hintArrow;
+      }
+
       // A tile's picture slice is decided by its *solved* position (value),
       // not where it currently sits. Sizing the background to N x 100%
       // makes the full image span the whole board; the position picks
@@ -362,8 +425,37 @@ function resetTimer() {
 
 // ============================================================
 // Magic Hint (budget depends on the difficulty)
-// Briefly highlights a tile the player is allowed to move.
+// ------------------------------------------------------------
+// A hint has to be genuinely useful, so it is not "any tile you
+// are allowed to move" - it is the next move of a real solution
+// worked out from the board in front of you.
+//
+// The plan is found with a beam search guided by the Manhattan
+// distance (how far every tile is from its home square). Beam
+// search keeps only the most promising layouts at each depth, so
+// it stays fast even on the 5x5 board, where searching for a
+// perfect solution would take far too long in a browser.
 // ============================================================
+
+// How wide/deep the search is allowed to go, per board size.
+const HINT_SEARCH = {
+  3: { width: 200, maxDepth: 120 },
+  4: { width: 400, maxDepth: 260 },
+  5: { width: 900, maxDepth: 600 },
+};
+
+const HINT_TIME_BUDGET_MS = 900; // never freeze the page looking for a hint
+
+// The tile the current hint is pointing at (null = no hint showing).
+// render() reads this, which is why the highlight survives a redraw.
+let hintIndex = null;
+let hintArrow = "";
+
+// A worked-out solution we can reuse, so asking for several hints
+// in a row does not re-run the search every time.
+let hintPlan = [];      // remaining moves, as tile indexes to click
+let hintPlanKey = "";   // the layout the plan was computed from
+
 function updateHintDisplay() {
   hintCounterEl.textContent = `Hints: ${hintsRemaining}`;
 }
@@ -372,35 +464,184 @@ function resetHints() {
   hintsRemaining = maxHints;
   updateHintDisplay();
   clearHintHighlight();
+  hintPlan = [];
+  hintPlanKey = "";
 }
 
 function clearHintHighlight() {
-  document.querySelectorAll(".magic-hint").forEach((tile) => {
-    tile.classList.remove("magic-hint");
-  });
+  hintIndex = null;
+  hintArrow = "";
+}
+
+// How far every tile is from where it belongs. 0 means solved.
+function manhattanDistance(layout) {
+  let total = 0;
+
+  for (let index = 0; index < layout.length; index++) {
+    const value = layout[index];
+    if (value === emptyValue) continue;
+
+    const currentRow = Math.floor(index / boardSize);
+    const currentCol = index % boardSize;
+    const goalRow = Math.floor(value / boardSize);
+    const goalCol = value % boardSize;
+
+    total += Math.abs(currentRow - goalRow) + Math.abs(currentCol - goalCol);
+  }
+
+  return total;
+}
+
+// Work out a full sequence of moves that solves `startLayout`.
+// Returns an array of tile indexes to click, or null if the search
+// ran out of room. Nodes keep a parent pointer instead of copying
+// the move list, which keeps the search cheap.
+function planSolution(startLayout) {
+  const limits = HINT_SEARCH[boardSize] || HINT_SEARCH[4];
+  const deadline = Date.now() + HINT_TIME_BUDGET_MS;
+  const goalKey = createSolvedBoard().join(",");
+
+  let beam = [{
+    layout: startLayout,
+    empty: startLayout.indexOf(emptyValue),
+    move: null,
+    parent: null,
+  }];
+
+  const seen = new Set([startLayout.join(",")]);
+
+  for (let depth = 0; depth < limits.maxDepth; depth++) {
+    const nextLevel = [];
+
+    for (const node of beam) {
+      for (const tileIndex of getMovableIndexes(node.empty)) {
+        const layout = node.layout.slice();
+        layout[node.empty] = layout[tileIndex];
+        layout[tileIndex] = emptyValue;
+
+        const key = layout.join(",");
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const child = { layout, empty: tileIndex, move: tileIndex, parent: node };
+
+        if (key === goalKey) return buildMoveList(child);
+
+        child.score = manhattanDistance(layout);
+        nextLevel.push(child);
+      }
+    }
+
+    if (nextLevel.length === 0) return null;
+    if (Date.now() > deadline) return null;
+
+    // Keep only the most promising layouts for the next round.
+    nextLevel.sort((a, b) => a.score - b.score);
+    beam = nextLevel.slice(0, limits.width);
+  }
+
+  return null;
+}
+
+// Walk the parent pointers back to the start to recover the moves.
+function buildMoveList(endNode) {
+  const moves = [];
+  for (let node = endNode; node && node.move !== null; node = node.parent) {
+    moves.unshift(node.move);
+  }
+  return moves;
+}
+
+// Safety net: if the search cannot find a full solution in time,
+// suggest the single legal move that brings the most tiles closer
+// to home. Never suggests undoing the move just played.
+function bestSingleMove() {
+  let best = null;
+  let bestScore = Infinity;
+
+  for (const tileIndex of getMovableIndexes(emptyIndex)) {
+    const layout = board.slice();
+    layout[emptyIndex] = layout[tileIndex];
+    layout[tileIndex] = emptyValue;
+
+    const score = manhattanDistance(layout);
+    if (score < bestScore) {
+      bestScore = score;
+      best = tileIndex;
+    }
+  }
+
+  return best;
+}
+
+// Which way does this tile slide to reach the gap?
+function arrowFor(tileIndex) {
+  if (tileIndex === emptyIndex + boardSize) return "↑"; // sits below the gap
+  if (tileIndex === emptyIndex - boardSize) return "↓"; // sits above the gap
+  if (tileIndex === emptyIndex + 1) return "←";
+  if (tileIndex === emptyIndex - 1) return "→";
+  return "•";
 }
 
 function showMagicHint() {
   if (gameCompleted) return;
 
-  if (hintsRemaining <= 0) {
-    alert(`You have used all ${maxHints} Magic Hints for this difficulty!`);
+  if (isSolved()) {
+    showActionMessage("The puzzle is already solved - no hint needed!");
     return;
   }
 
-  const movableIndexes = getMovableIndexes(emptyIndex);
-  if (movableIndexes.length === 0) return;
+  if (hintsRemaining <= 0) {
+    showActionMessage(
+      `No Magic Hints left - you get ${maxHints} on ${DIFFICULTIES[selectedDifficulty].label}.`
+    );
+    return;
+  }
 
-  const randomIndex =
-    movableIndexes[Math.floor(Math.random() * movableIndexes.length)];
-  const tile = document.querySelectorAll("#puzzleBoard .tile")[randomIndex];
-  if (!tile) return;
+  const currentKey = board.join(",");
+  let suggestion = null;
+  let exact = true;
+
+  // Reuse the existing plan when the board still matches it.
+  if (hintPlan.length > 0 && hintPlanKey === currentKey) {
+    suggestion = hintPlan[0];
+  } else {
+    const plan = planSolution(board.slice());
+
+    if (plan && plan.length > 0) {
+      hintPlan = plan;
+      hintPlanKey = currentKey;
+      suggestion = plan[0];
+    } else {
+      // Could not solve the whole board in the time available.
+      suggestion = bestSingleMove();
+      exact = false;
+      hintPlan = [];
+      hintPlanKey = "";
+    }
+  }
+
+  if (suggestion === null || suggestion === undefined) {
+    showActionMessage("No hint available for this board.");
+    return;
+  }
 
   hintsRemaining--;
   updateHintDisplay();
 
-  tile.classList.add("magic-hint");
-  setTimeout(() => tile.classList.remove("magic-hint"), 2000);
+  hintIndex = suggestion;
+  hintArrow = arrowFor(suggestion);
+  render(); // redraw so the highlight and arrow appear
+
+  const movesLeft = hintPlan.length;
+  showActionMessage(
+    exact
+      ? `Magic Hint: slide the glowing tile ${hintArrow} into the gap. ` +
+        `This puzzle can be finished in ${movesLeft} more move${movesLeft === 1 ? "" : "s"}. ` +
+        `(${hintsRemaining} hint${hintsRemaining === 1 ? "" : "s"} left)`
+      : `Magic Hint: slide the glowing tile ${hintArrow} into the gap - ` +
+        `it brings the picture closer to finished. (${hintsRemaining} left)`
+  );
 }
 
 
